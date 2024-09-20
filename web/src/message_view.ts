@@ -33,6 +33,7 @@ import type {MessageList, SelectIdOpts} from "./message_list";
 import * as message_list from "./message_list";
 import {MessageListData} from "./message_list_data";
 import * as message_list_data_cache from "./message_list_data_cache";
+import * as message_list_navigation from "./message_list_navigation";
 import * as message_lists from "./message_lists";
 import * as message_scroll_state from "./message_scroll_state";
 import {raw_message_schema} from "./message_store";
@@ -60,7 +61,6 @@ import * as submessage from "./submessage";
 import * as topic_generator from "./topic_generator";
 import * as typing_events from "./typing_events";
 import * as unread_ops from "./unread_ops";
-import * as unread_ui from "./unread_ui";
 import {user_settings} from "./user_settings";
 import * as util from "./util";
 
@@ -76,7 +76,6 @@ export function reset_ui_state(opts: {trigger?: string}): void {
     narrow_banner.hide_empty_narrow_message();
     message_feed_top_notices.hide_top_of_narrow_notices();
     message_feed_loading.hide_indicators();
-    unread_ui.reset_unread_banner();
     // We sometimes prevent draft restoring until the narrow resets.
     compose_state.allow_draft_restoring();
     // Most users aren't going to send a bunch of a out-of-narrow messages
@@ -241,6 +240,7 @@ function create_and_update_message_list(
     // From here on down, any calls to the narrow_state API will
     // reflect the requested narrow.
     message_lists.update_current_message_list(msg_list);
+    message_list_navigation.update();
     return {msg_list, restore_rendered_list};
 }
 
@@ -272,9 +272,6 @@ function handle_post_message_list_change(
     }
 
     handle_post_view_change(msg_list, opts);
-
-    unread_ui.update_unread_banner();
-
     // It is important to call this after other important updates
     // like narrow filter and compose recipients happen.
     compose_recipient.handle_middle_pane_transition();
@@ -895,6 +892,7 @@ export function fast_track_current_msg_list_to_anchor(anchor: string): void {
                 return msg_list_data.first()!.id;
             },
         });
+        message_lists.current.unfocus_navigation_bar();
     } else if (anchor === "newest") {
         navigate_to_anchor_message({
             anchor,
@@ -905,6 +903,7 @@ export function fast_track_current_msg_list_to_anchor(anchor: string): void {
                 return msg_list_data.last()!.id;
             },
         });
+        message_lists.current.focus_navigation_bar();
     } else {
         blueslip.error(`Invalid anchor value: ${anchor}`);
     }
