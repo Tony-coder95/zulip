@@ -2,6 +2,7 @@ import assert from "minimalistic-assert";
 
 import * as hash_util from "./hash_util";
 import {$t} from "./i18n";
+import * as message_lists from "./message_lists";
 import * as muted_users from "./muted_users";
 import * as narrow_state from "./narrow_state";
 import {page_params} from "./page_params";
@@ -307,10 +308,13 @@ function maybe_shrink_list(user_ids: number[], user_filter_text: string): number
         stream_id &&
         peer_data.get_subscriber_count(stream_id) <= max_channel_size_to_show_all_subscribers;
 
+    const conversation_participants = get_conversation_participants();
+
     user_ids = user_ids.filter(
         (user_id) =>
             user_is_recently_active(user_id) ||
-            user_matches_narrow(user_id, pm_ids_set, filter_by_stream_id ? stream_id : undefined),
+            user_matches_narrow(user_id, pm_ids_set, filter_by_stream_id ? stream_id : undefined) ||
+            conversation_participants.has(user_id),
     );
 
     return user_ids;
@@ -393,10 +397,33 @@ function get_filtered_user_id_list(user_filter_text: string): number[] {
                 base_user_id_list = [...base_user_id_set];
             }
         }
+
+        // We always want to show conversation participants even if they're inactive.
+        const base_user_id_set = new Set([
+            ...base_user_id_list,
+            ...get_conversation_participants(),
+        ]);
+        base_user_id_list = [...base_user_id_set];
     }
 
     const user_ids = filter_user_ids(user_filter_text, base_user_id_list);
     return user_ids;
+}
+
+export function get_conversation_participants(): Set<number> {
+    const participant_ids_set = new Set<number>();
+    if (!narrow_state.stream_id() || !narrow_state.topic() || !message_lists.current) {
+        return participant_ids_set;
+    }
+    for (const message of message_lists.current.all_messages()) {
+        if (
+            !people.is_valid_bot_user(message.sender_id) &&
+            people.is_person_active(message.sender_id)
+        ) {
+            participant_ids_set.add(message.sender_id);
+        }
+    }
+    return participant_ids_set;
 }
 
 export function get_filtered_and_sorted_user_ids(user_filter_text: string): number[] {
